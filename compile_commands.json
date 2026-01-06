@@ -1,0 +1,17 @@
+[
+  {
+    "arguments": [
+      "/usr/bin/gcc",
+      "-Wall",
+      "-Wextra",
+      "-std=c11",
+      "-c",
+      "-o",
+      "src/main.o",
+      "src/main.c"
+    ],
+    "directory": "/home/ahmetdem/Dev/renderer",
+    "file": "/home/ahmetdem/Dev/renderer/src/main.c",
+    "output": "/home/ahmetdem/Dev/renderer/src/main.o"
+  }
+]
