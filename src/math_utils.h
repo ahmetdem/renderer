@@ -1,18 +1,10 @@
 #ifndef MATH_UTILS_H
 #define MATH_UTILS_H
 
+#include "types.h"
 #include <math.h>
 #include <stdint.h>
 
-#define M_PI 3.14
-#define RADIANS(deg) ((deg) * (M_PI / 180.0f))
-
-/* Vector 3 */
-typedef struct {
-  float x, y, z;
-} vec3_t;
-
-// Internal Functions
 static inline vec3_t vec3_add_s(const vec3_t a, float k) {
   return (vec3_t){a.x + k, a.y + k, a.z + k};
 }
@@ -43,7 +35,6 @@ static inline vec3_t vec3_mul_s(const vec3_t a, float k) {
 #define vec3_mul(a, b)                                                         \
   _Generic((b), float: vec3_mul_s, double: vec3_mul_s, int: vec3_mul_s)(a, b)
 
-// Standart Functions
 static inline float vec3_dot(const vec3_t a, const vec3_t b) {
   return a.x * b.x + a.y * b.y + a.z * b.z;
 }
@@ -65,15 +56,6 @@ static inline vec3_t vec3_normalize(vec3_t v) {
 
   return (vec3_t){0, 0, 0};
 }
-
-/* 4x4 Matrix */
-typedef struct {
-  float m[16];
-} mat4_t;
-
-typedef struct {
-  float x, y, z, w;
-} vec4_t;
 
 static inline mat4_t mat4_identity(void) {
   mat4_t res = {0};
@@ -179,6 +161,14 @@ static inline mat4_t mat4_make_perspective(float fov, float aspect, float znear,
 
 static inline vec4_t vec3_to_vec4(vec3_t vec3) {
   return (vec4_t){vec3.x, vec3.y, vec3.z, 1.0f};
+}
+
+static inline float deg_to_rad(float degrees) {
+  return degrees * (M_PI / 180.0f);
+}
+
+static inline float rad_to_deg(float radians) {
+  return radians * (180.0f / M_PI);
 }
 
 #endif
