@@ -57,6 +57,18 @@ static inline vec3_t vec3_normalize(vec3_t v) {
   return (vec3_t){0, 0, 0};
 }
 
+static inline vec4_t vec3_to_vec4(vec3_t vec3) {
+  return (vec4_t){vec3.x, vec3.y, vec3.z, 1.0f};
+}
+
+static inline float deg_to_rad(float degrees) {
+  return degrees * (M_PI / 180.0f);
+}
+
+static inline float rad_to_deg(float radians) {
+  return radians * (180.0f / M_PI);
+}
+
 static inline mat4_t mat4_identity(void) {
   mat4_t res = {0};
   res.m[0] = res.m[5] = res.m[10] = res.m[15] = 1.0f;
@@ -159,16 +171,32 @@ static inline mat4_t mat4_make_perspective(float fov, float aspect, float znear,
   return matrix;
 }
 
-static inline vec4_t vec3_to_vec4(vec3_t vec3) {
-  return (vec4_t){vec3.x, vec3.y, vec3.z, 1.0f};
-}
+static inline mat4_t mat4_look_at(vec3_t cam_pos, vec3_t cam_target,
+                                  vec3_t cam_up) {
+  vec3_t cam_dir = vec3_sub(cam_pos, cam_target);
 
-static inline float deg_to_rad(float degrees) {
-  return degrees * (M_PI / 180.0f);
-}
+  vec3_t cam_right = vec3_normalize(vec3_cross(cam_up, cam_dir));
+  vec3_t actual_up = vec3_cross(cam_dir, cam_right);
 
-static inline float rad_to_deg(float radians) {
-  return radians * (180.0f / M_PI);
+  mat4_t left_side = mat4_identity();
+  left_side.m[0] = cam_right.x;
+  left_side.m[1] = cam_right.y;
+  left_side.m[2] = cam_right.z;
+
+  left_side.m[4] = actual_up.x;
+  left_side.m[5] = actual_up.y;
+  left_side.m[6] = actual_up.z;
+
+  left_side.m[8] = cam_dir.x;
+  left_side.m[9] = cam_dir.y;
+  left_side.m[10] = cam_dir.z;
+
+  mat4_t right_side = mat4_identity();
+  right_side.m[3] = -cam_pos.x;
+  right_side.m[7] = -cam_pos.y;
+  right_side.m[11] = -cam_pos.z;
+
+  return mat4_mul_mat4(left_side, right_side);
 }
 
 #endif

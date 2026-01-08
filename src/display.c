@@ -70,7 +70,7 @@ void draw_line(int x0, int y0, int x1, int y1, uint32_t color) {
   }
 }
 
-void draw_cube(vec3_t t_m, vec3_t r_m, vec3_t s_m, game_t* g) {
+void draw_cube(vec3_t t_m, vec3_t r_m, vec3_t s_m, game_t *g) {
   vec3_t cube_vertices[] = {{-1, -1, -1}, {1, -1, -1}, {1, 1, -1}, {-1, 1, -1},
                             {-1, -1, 1},  {1, -1, 1},  {1, 1, 1},  {-1, 1, 1}};
 
@@ -84,21 +84,24 @@ void draw_cube(vec3_t t_m, vec3_t r_m, vec3_t s_m, game_t* g) {
       mat4_mul_mat4(rotation_x, mat4_mul_mat4(rotation_y, rotation_z));
 
   mat4_t translation_m = mat4_make_translation(t_m.x, t_m.y, t_m.z);
-  mat4_t world_m =
-      mat4_mul_mat4(translation_m, mat4_mul_mat4(scale_m, rotation_m));
+  mat4_t model_m =
+      mat4_mul_mat4(translation_m, mat4_mul_mat4(rotation_m, scale_m));
+
+  mat4_t mvp_m = mat4_mul_mat4(g->projection_matrix,
+                               mat4_mul_mat4(g->view_matrix, model_m));
 
   vec3_t projected_points[8];
 
   for (int i = 0; i < 8; i++) {
-    vec4_t world_pos = mat4_mul_vec4(world_m, vec3_to_vec4(cube_vertices[i]));
+    vec4_t clip_pos = mat4_mul_vec4(mvp_m, vec3_to_vec4(cube_vertices[i]));
 
-    if (world_pos.z > -0.1f) {
-      projected_points[i] = (vec3_t){-1000, -1000, 0};
+    if (clip_pos.w < 0.1f) {
+      projected_points[i] = (vec3_t){-10000, -10000, 0};
       continue;
     }
 
-    vec3_t projected = vec3_project(
-        (vec3_t){world_pos.x, world_pos.y, world_pos.z}, g->projection_matrix);
+    vec3_t projected = {clip_pos.x / clip_pos.w, clip_pos.y / clip_pos.w,
+                        clip_pos.z / clip_pos.w};
 
     projected_points[i].x = (projected.x + 1) * 0.5 * screen_width;
     projected_points[i].y = (1 - projected.y) * 0.5 * screen_height;

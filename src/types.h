@@ -21,6 +21,7 @@ typedef struct {
   float m[16];
 } mat4_t;
 
+/*Game Struct*/
 typedef struct {
   bool is_running;
 
@@ -35,6 +36,8 @@ typedef struct {
   // Timing
   float delta_time;
   uint64_t last_frame_time;
+  int target_frame_rate;
+  int frame_time;
 
   // Scene Data
   vec3_t cube_pos;
@@ -45,6 +48,16 @@ typedef struct {
   float total_rotation;
 
   mat4_t projection_matrix;
+
+  // Camera
+  vec3_t camera_pos;
+  vec3_t camera_front;
+  vec3_t camera_up;
+  float camera_yaw;
+  float camera_pitch;
+  float sensitivity;
+
+  mat4_t view_matrix;
 } game_t;
 
 #endif

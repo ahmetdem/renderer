@@ -1,7 +1,6 @@
 #ifndef DISPLAY_H
 #define DISPLAY_H
 
-#include "math_utils.h"
 #include "types.h"
 #include <stdint.h>
 
