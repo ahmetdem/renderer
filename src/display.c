@@ -1,7 +1,9 @@
 #include "display.h"
 #include "colors.h"
 #include "math_utils.h"
+#include "types.h"
 #include <SDL3/SDL_stdinc.h>
+#include <stdint.h>
 #include <time.h>
 
 static uint32_t *framebuffer = NULL;
@@ -70,14 +72,59 @@ void draw_line(int x0, int y0, int x1, int y1, uint32_t color) {
   }
 }
 
+void draw_scanline(int x0, int x1, int y, uint32_t color) {
+  if (y < 0 || y >= screen_height)
+    return;
+
+  if (x0 > x1) {
+    int temp = x0;
+    x0 = x1;
+    x1 = temp;
+  }
+
+  if (x0 >= screen_width)
+    return;
+  if (x1 < 0)
+    return;
+
+  if (x0 < 0)
+    x0 = 0;
+  if (x1 >= screen_width)
+    x1 = screen_width - 1;
+
+  uint32_t *pixel_row = framebuffer + (y * (screen_pitch / 4));
+
+  for (int x = x0; x <= x1; x++) {
+    pixel_row[x] = color;
+  }
+}
+
 void draw_cube(vec3_t t_m, vec3_t r_m, vec3_t s_m, game_t *g) {
   vec3_t cube_vertices[] = {{-1, -1, -1}, {1, -1, -1}, {1, 1, -1}, {-1, 1, -1},
                             {-1, -1, 1},  {1, -1, 1},  {1, 1, 1},  {-1, 1, 1}};
 
+  int cube_indices[] = {// Front Face (Z+)
+                        4, 5, 6, 4, 6, 7,
+
+                        // Right Face (X+)
+                        5, 1, 2, 5, 2, 6,
+
+                        // Back Face (Z-)
+                        1, 0, 3, 1, 3, 2,
+
+                        // Left Face (X-)
+                        0, 4, 7, 0, 7, 3,
+
+                        // Top Face (Y+)
+                        7, 6, 2, 7, 2, 3,
+
+                        // Bottom Face (Y-)
+                        0, 1, 5, 0, 5, 4};
+
   mat4_t scale_m = mat4_make_scale(s_m.x, s_m.y, s_m.z);
 
-  mat4_t rotation_z = mat4_make_rotation_z(deg_to_rad(r_m.x));
-  mat4_t rotation_y = mat4_make_rotation_y(deg_to_rad(r_m.x));
+  mat4_t rotation_z = mat4_make_rotation_z(deg_to_rad(r_m.z));
+  mat4_t rotation_y = mat4_make_rotation_y(deg_to_rad(r_m.y));
   mat4_t rotation_x = mat4_make_rotation_x(deg_to_rad(r_m.x));
 
   mat4_t rotation_m =
@@ -107,33 +154,134 @@ void draw_cube(vec3_t t_m, vec3_t r_m, vec3_t s_m, game_t *g) {
     projected_points[i].y = (1 - projected.y) * 0.5 * screen_height;
   }
 
-  // Front Face
-  draw_line(projected_points[0].x, projected_points[0].y, projected_points[1].x,
-            projected_points[1].y, COLOR_WHITE);
-  draw_line(projected_points[1].x, projected_points[1].y, projected_points[2].x,
-            projected_points[2].y, COLOR_WHITE);
-  draw_line(projected_points[2].x, projected_points[2].y, projected_points[3].x,
-            projected_points[3].y, COLOR_WHITE);
-  draw_line(projected_points[3].x, projected_points[3].y, projected_points[0].x,
-            projected_points[0].y, COLOR_WHITE);
+  // 0, 3, 6, 9, ...
+  for (int i = 0; i < 36; i += 3) {
+    int index0 = cube_indices[i];
+    int index1 = cube_indices[i + 1];
+    int index2 = cube_indices[i + 2];
 
-  // Back Face
-  draw_line(projected_points[4].x, projected_points[4].y, projected_points[5].x,
-            projected_points[5].y, COLOR_WHITE);
-  draw_line(projected_points[5].x, projected_points[5].y, projected_points[6].x,
-            projected_points[6].y, COLOR_WHITE);
-  draw_line(projected_points[6].x, projected_points[6].y, projected_points[7].x,
-            projected_points[7].y, COLOR_WHITE);
-  draw_line(projected_points[7].x, projected_points[7].y, projected_points[4].x,
-            projected_points[4].y, COLOR_WHITE);
+    vec4_t v0_world4 =
+        mat4_mul_vec4(model_m, vec3_to_vec4(cube_vertices[index0]));
+    vec4_t v1_world4 =
+        mat4_mul_vec4(model_m, vec3_to_vec4(cube_vertices[index1]));
+    vec4_t v2_world4 =
+        mat4_mul_vec4(model_m, vec3_to_vec4(cube_vertices[index2]));
 
-  // Connecting the two faces
-  draw_line(projected_points[0].x, projected_points[0].y, projected_points[4].x,
-            projected_points[4].y, COLOR_WHITE);
-  draw_line(projected_points[1].x, projected_points[1].y, projected_points[5].x,
-            projected_points[5].y, COLOR_WHITE);
-  draw_line(projected_points[2].x, projected_points[2].y, projected_points[6].x,
-            projected_points[6].y, COLOR_WHITE);
-  draw_line(projected_points[3].x, projected_points[3].y, projected_points[7].x,
-            projected_points[7].y, COLOR_WHITE);
+    vec3_t v0_world = {v0_world4.x, v0_world4.y, v0_world4.z};
+    vec3_t v1_world = {v1_world4.x, v1_world4.y, v1_world4.z};
+    vec3_t v2_world = {v2_world4.x, v2_world4.y, v2_world4.z};
+
+    vec3_t triangle_normal =
+        calculate_triangle_normal(v0_world, v1_world, v2_world);
+
+    vec3_t center = calculate_triangle_center(v0_world, v1_world, v2_world);
+    vec3_t view_ray = vec3_sub(center, g->camera_pos);
+
+    float dot = vec3_dot(triangle_normal, view_ray);
+
+    if (dot > 0) {
+      continue;
+    }
+
+    triangle_t triangle;
+    triangle.points[0].position = projected_points[index0];
+    triangle.points[1].position = projected_points[index1];
+    triangle.points[2].position = projected_points[index2];
+
+    draw_filled_triangle(&triangle, COLOR_WHITE);
+
+    draw_line(triangle.points[0].position.x, triangle.points[0].position.y,
+              triangle.points[1].position.x, triangle.points[1].position.y,
+              COLOR_BLACK);
+    draw_line(triangle.points[1].position.x, triangle.points[1].position.y,
+              triangle.points[2].position.x, triangle.points[2].position.y,
+              COLOR_BLACK);
+    draw_line(triangle.points[2].position.x, triangle.points[2].position.y,
+              triangle.points[0].position.x, triangle.points[0].position.y,
+              COLOR_BLACK);
+  }
+}
+
+void fillBottomFlatTriangle(float x1, float y1, float x2, float x3, float y2,
+                            uint32_t color) {
+  float height = y2 - y1;
+  if (height <= 0.0f)
+    return;
+
+  float invslope1 = (x2 - x1) / height;
+  float invslope2 = (x3 - x1) / height;
+
+  // Simplified top-left rule.
+  int scanlineY = (int)ceilf(y1);
+  int scanlineEnd = (int)ceilf(y2) - 1;
+
+  float y_prestep = (float)scanlineY - y1;
+
+  float curx1 = x1 + (invslope1 * y_prestep);
+  float curx2 = x1 + (invslope2 * y_prestep);
+
+  for (int y = scanlineY; y <= scanlineEnd; y++) {
+    draw_scanline((int)curx1, (int)curx2, y, color);
+    curx1 += invslope1;
+    curx2 += invslope2;
+  }
+}
+
+void fillTopFlatTriangle(float x1, float x2, float y1, float x3, float y2,
+                         uint32_t color) {
+  float height = y2 - y1;
+  if (height <= 0.0f)
+    return;
+
+  float invslope1 = (x3 - x1) / height;
+  float invslope2 = (x3 - x2) / height;
+
+  int scanlineY = (int)ceilf(y1);
+  int scanlineEnd = (int)ceilf(y2) - 1;
+
+  float y_prestep = (float)scanlineY - y1;
+
+  float curx1 = x1 + (invslope1 * y_prestep);
+  float curx2 = x2 + (invslope2 * y_prestep);
+
+  for (int y = scanlineY; y <= scanlineEnd; y++) {
+    draw_scanline((int)curx1, (int)curx2, y, color);
+    curx1 += invslope1;
+    curx2 += invslope2;
+  }
+}
+
+void draw_filled_triangle(const triangle_t *triangle, uint32_t color) {
+  vertex_t v0 = triangle->points[0];
+  vertex_t v1 = triangle->points[1];
+  vertex_t v2 = triangle->points[2];
+
+  // v0.y > v1.y > v2.y
+  if (v0.position.y > v1.position.y) {
+    swap(&v0, &v1);
+  }
+  if (v0.position.y > v2.position.y) {
+    swap(&v0, &v2);
+  }
+  if (v1.position.y > v2.position.y) {
+    swap(&v1, &v2);
+  }
+
+  if (v1.position.y == v2.position.y) {
+    fillBottomFlatTriangle(v0.position.x, v0.position.y, v1.position.x,
+                           v2.position.x, v1.position.y, color);
+  } else if (v0.position.y == v1.position.y) {
+    fillTopFlatTriangle(v0.position.x, v1.position.x, v0.position.y,
+                        v2.position.x, v2.position.y, color);
+  } else {
+    float x3 = v0.position.x + ((v1.position.y - v0.position.y) /
+                                (v2.position.y - v0.position.y)) *
+                                   (v2.position.x - v0.position.x);
+
+    fillBottomFlatTriangle(v0.position.x, v0.position.y, v1.position.x, x3,
+                           v1.position.y, color);
+
+    fillTopFlatTriangle(v1.position.x, x3, v1.position.y, v2.position.x,
+                        v2.position.y, color);
+  }
 }

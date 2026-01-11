@@ -199,4 +199,24 @@ static inline mat4_t mat4_look_at(vec3_t cam_pos, vec3_t cam_target,
   return mat4_mul_mat4(left_side, right_side);
 }
 
+static inline void swap(vertex_t *a, vertex_t *b) {
+  vertex_t temp = *a;
+  *a = *b;
+  *b = temp;
+}
+
+static inline vec3_t calculate_triangle_normal(vec3_t v0, vec3_t v1,
+                                               vec3_t v2) {
+  vec3_t A = vec3_sub_v(v1, v0);
+  vec3_t B = vec3_sub_v(v2, v0);
+
+  return vec3_normalize(vec3_cross(A, B));
+}
+
+static inline vec3_t calculate_triangle_center(vec3_t v0, vec3_t v1,
+                                               vec3_t v2) {
+  vec3_t sum = vec3_add_v(v0, vec3_add_v(v1, v2));
+  return vec3_mul_s(sum, 1.0f / 3.0f);
+}
+
 #endif

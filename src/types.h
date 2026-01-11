@@ -21,6 +21,14 @@ typedef struct {
   float m[16];
 } mat4_t;
 
+typedef struct {
+  vec3_t position;
+} vertex_t;
+
+typedef struct {
+  vertex_t points[3];
+} triangle_t;
+
 /*Game Struct*/
 typedef struct {
   bool is_running;
@@ -43,6 +51,8 @@ typedef struct {
   vec3_t cube_pos;
   vec3_t cube_rot;
   vec3_t cube_scale;
+
+  triangle_t triangle;
 
   float rotation_speed;
   float total_rotation;
