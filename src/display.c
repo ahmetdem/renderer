@@ -3,23 +3,30 @@
 #include "math_utils.h"
 #include "types.h"
 #include <SDL3/SDL_stdinc.h>
+#include <float.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <time.h>
 
 static uint32_t *framebuffer = NULL;
+static float *depthbuffer = NULL;
+
 static int screen_width = 0;
 static int screen_height = 0;
 static int screen_pitch = 0;
 
-void set_render_target(uint32_t *pixels, int width, int height, int pitch) {
-  framebuffer = pixels;
-  screen_width = width;
-  screen_height = height;
-  screen_pitch = pitch;
+void set_render_target(game_t *g) {
+  framebuffer = g->pixel_buffer;
+  depthbuffer = g->depth_buffer;
+
+  screen_width = g->width;
+  screen_height = g->height;
+  screen_pitch = g->pitch;
 }
 
 void clear_screen(uint32_t color) {
   SDL_memset4(framebuffer, color, screen_width * screen_height);
+  memset(depthbuffer, 0, screen_width * screen_height * sizeof(float));
 }
 
 void draw_pixel(int x, int y, uint32_t color) {
@@ -37,23 +44,37 @@ void draw_rect(int x, int y, int w, int h, uint32_t color) {
   }
 }
 
-void draw_line(int x0, int y0, int x1, int y1, uint32_t color) {
-  int dx = (x1 - x0);
-  int dy = (y1 - y0);
+void draw_line(vertex_t v0, vertex_t v1, uint32_t color) {
+  int x0 = (int)v0.pos.x;
+  int y0 = (int)v0.pos.y;
+  int x1 = (int)v1.pos.x;
+  int y1 = (int)v1.pos.y;
 
-  int step_x = (dx >= 0) ? 1 : -1;
-  int step_y = (dy >= 0) ? 1 : -1;
+  float w0 = v1.pos.z;
+  float w1 = v1.pos.z;
 
-  dx = (dx >= 0) ? dx : -dx;
-  dy = (dy >= 0) ? dy : -dy;
+  int dx = abs(x1 - x0);
+  int dy = abs(y1 - y0);
 
-  int sx = step_x;
-  int sy = step_y;
+  int side_length = (abs(dx) >= abs(dy)) ? abs(dx) : abs(dy);
+
+  float w_step = (side_length == 0) ? 0.0f : (w1 - w0) / side_length;
+  float current_w = w0;
+
+  int sx = (x0 < x1) ? 1 : -1;
+  int sy = (y0 < y1) ? 1 : -1;
 
   int err = dx - dy;
 
   while (1) {
-    draw_pixel(x0, y0, color);
+    if (x0 >= 0 && x0 < screen_width && y0 >= 0 && y0 < screen_height) {
+      if (current_w > depthbuffer[y0 * screen_width + x0]) {
+        depthbuffer[y0 * screen_width + x0] = current_w;
+        draw_pixel(x0, y0, color);
+      }
+    }
+
+    current_w += w_step;
 
     if (x0 == x1 && y0 == y1)
       break;
@@ -72,7 +93,7 @@ void draw_line(int x0, int y0, int x1, int y1, uint32_t color) {
   }
 }
 
-void draw_scanline(int x0, int x1, int y, uint32_t color) {
+void draw_scanline(int x0, int x1, int y, float w0, float w1, uint32_t color) {
   if (y < 0 || y >= screen_height)
     return;
 
@@ -80,6 +101,10 @@ void draw_scanline(int x0, int x1, int y, uint32_t color) {
     int temp = x0;
     x0 = x1;
     x1 = temp;
+
+    float tempW = w0;
+    w0 = w1;
+    w1 = tempW;
   }
 
   if (x0 >= screen_width)
@@ -92,10 +117,20 @@ void draw_scanline(int x0, int x1, int y, uint32_t color) {
   if (x1 >= screen_width)
     x1 = screen_width - 1;
 
+  float w_step = (w1 - w0) / (float)(x1 - x0);
+  float current_w = w0;
+
   uint32_t *pixel_row = framebuffer + (y * (screen_pitch / 4));
+  float *depth_row =
+      depthbuffer + (y * screen_width); // Point to correct row in Z-buffer
 
   for (int x = x0; x <= x1; x++) {
-    pixel_row[x] = color;
+    if (current_w > depth_row[x]) {
+      depth_row[x] = current_w;
+      pixel_row[x] = color;
+    }
+
+    current_w += w_step;
   }
 }
 
@@ -150,6 +185,8 @@ void draw_cube(vec3_t t_m, vec3_t r_m, vec3_t s_m, game_t *g) {
     vec3_t projected = {clip_pos.x / clip_pos.w, clip_pos.y / clip_pos.w,
                         clip_pos.z / clip_pos.w};
 
+    projected_points[i].z = 1.0f / clip_pos.w;
+
     projected_points[i].x = (projected.x + 1) * 0.5 * screen_width;
     projected_points[i].y = (1 - projected.y) * 0.5 * screen_height;
   }
@@ -184,70 +221,75 @@ void draw_cube(vec3_t t_m, vec3_t r_m, vec3_t s_m, game_t *g) {
     }
 
     triangle_t triangle;
-    triangle.points[0].position = projected_points[index0];
-    triangle.points[1].position = projected_points[index1];
-    triangle.points[2].position = projected_points[index2];
+    triangle.points[0].pos = projected_points[index0];
+    triangle.points[1].pos = projected_points[index1];
+    triangle.points[2].pos = projected_points[index2];
 
-    draw_filled_triangle(&triangle, COLOR_WHITE);
+    draw_filled_triangle(&triangle, COLOR_MAGENTA);
 
-    draw_line(triangle.points[0].position.x, triangle.points[0].position.y,
-              triangle.points[1].position.x, triangle.points[1].position.y,
-              COLOR_BLACK);
-    draw_line(triangle.points[1].position.x, triangle.points[1].position.y,
-              triangle.points[2].position.x, triangle.points[2].position.y,
-              COLOR_BLACK);
-    draw_line(triangle.points[2].position.x, triangle.points[2].position.y,
-              triangle.points[0].position.x, triangle.points[0].position.y,
-              COLOR_BLACK);
+    draw_line(triangle.points[0], triangle.points[1], COLOR_BLACK);
+    draw_line(triangle.points[1], triangle.points[2], COLOR_BLACK);
+    draw_line(triangle.points[2], triangle.points[0], COLOR_BLACK);
   }
 }
 
-void fillBottomFlatTriangle(float x1, float y1, float x2, float x3, float y2,
+void fillBottomFlatTriangle(vertex_t v1, vertex_t v2, vertex_t v3,
                             uint32_t color) {
-  float height = y2 - y1;
-  if (height <= 0.0f)
-    return;
+  float invslope1 = (v2.pos.x - v1.pos.x) / (v2.pos.y - v1.pos.y);
+  float invslope2 = (v3.pos.x - v1.pos.x) / (v3.pos.y - v1.pos.y);
 
-  float invslope1 = (x2 - x1) / height;
-  float invslope2 = (x3 - x1) / height;
+  float w_slope1 = (v2.pos.z - v1.pos.z) / (v2.pos.y - v1.pos.y);
+  float w_slope2 = (v3.pos.z - v1.pos.z) / (v3.pos.y - v1.pos.y);
 
-  // Simplified top-left rule.
-  int scanlineY = (int)ceilf(y1);
-  int scanlineEnd = (int)ceilf(y2) - 1;
+  int scanlineY = (int)ceilf(v1.pos.y);
+  int scanlineEnd = (int)ceilf(v2.pos.y) - 1;
 
-  float y_prestep = (float)scanlineY - y1;
+  float y_prestep = (float)scanlineY - v1.pos.y;
 
-  float curx1 = x1 + (invslope1 * y_prestep);
-  float curx2 = x1 + (invslope2 * y_prestep);
+  float curx1 = v1.pos.x + (invslope1 * y_prestep);
+  float curx2 = v1.pos.x + (invslope2 * y_prestep);
+
+  float curw1 = v1.pos.z + (w_slope1 * y_prestep);
+  float curw2 = v1.pos.z + (w_slope2 * y_prestep);
 
   for (int y = scanlineY; y <= scanlineEnd; y++) {
-    draw_scanline((int)curx1, (int)curx2, y, color);
+    draw_scanline((int)curx1, (int)curx2, y, curw1, curw2, color);
+
     curx1 += invslope1;
     curx2 += invslope2;
+
+    curw1 += w_slope1;
+    curw2 += w_slope2;
   }
 }
 
-void fillTopFlatTriangle(float x1, float x2, float y1, float x3, float y2,
+void fillTopFlatTriangle(vertex_t v1, vertex_t v2, vertex_t v3,
                          uint32_t color) {
-  float height = y2 - y1;
-  if (height <= 0.0f)
-    return;
+  float invslope1 = (v3.pos.x - v1.pos.x) / (v3.pos.y - v1.pos.y);
+  float invslope2 = (v3.pos.x - v2.pos.x) / (v3.pos.y - v2.pos.y);
 
-  float invslope1 = (x3 - x1) / height;
-  float invslope2 = (x3 - x2) / height;
+  float w_slope1 = (v3.pos.z - v1.pos.z) / (v3.pos.y - v1.pos.y);
+  float w_slope2 = (v3.pos.z - v2.pos.z) / (v3.pos.y - v2.pos.y);
 
-  int scanlineY = (int)ceilf(y1);
-  int scanlineEnd = (int)ceilf(y2) - 1;
+  int scanlineY = (int)ceilf(v1.pos.y);
+  int scanlineEnd = (int)ceilf(v3.pos.y) - 1;
 
-  float y_prestep = (float)scanlineY - y1;
+  float y_prestep = (float)scanlineY - v1.pos.y;
 
-  float curx1 = x1 + (invslope1 * y_prestep);
-  float curx2 = x2 + (invslope2 * y_prestep);
+  float curx1 = v1.pos.x + (invslope1 * y_prestep);
+  float curx2 = v2.pos.x + (invslope2 * y_prestep);
+
+  float curw1 = v1.pos.z + (w_slope1 * y_prestep);
+  float curw2 = v2.pos.z + (w_slope2 * y_prestep);
 
   for (int y = scanlineY; y <= scanlineEnd; y++) {
-    draw_scanline((int)curx1, (int)curx2, y, color);
+    draw_scanline((int)curx1, (int)curx2, y, curw1, curw2, color);
+
     curx1 += invslope1;
     curx2 += invslope2;
+
+    curw1 += w_slope1;
+    curw2 += w_slope2;
   }
 }
 
@@ -256,32 +298,27 @@ void draw_filled_triangle(const triangle_t *triangle, uint32_t color) {
   vertex_t v1 = triangle->points[1];
   vertex_t v2 = triangle->points[2];
 
-  // v0.y > v1.y > v2.y
-  if (v0.position.y > v1.position.y) {
+  if (v0.pos.y > v1.pos.y)
     swap(&v0, &v1);
-  }
-  if (v0.position.y > v2.position.y) {
+  if (v0.pos.y > v2.pos.y)
     swap(&v0, &v2);
-  }
-  if (v1.position.y > v2.position.y) {
+  if (v1.pos.y > v2.pos.y)
     swap(&v1, &v2);
-  }
 
-  if (v1.position.y == v2.position.y) {
-    fillBottomFlatTriangle(v0.position.x, v0.position.y, v1.position.x,
-                           v2.position.x, v1.position.y, color);
-  } else if (v0.position.y == v1.position.y) {
-    fillTopFlatTriangle(v0.position.x, v1.position.x, v0.position.y,
-                        v2.position.x, v2.position.y, color);
+  if (v1.pos.y == v2.pos.y) {
+    fillBottomFlatTriangle(v0, v1, v2, color);
+  } else if (v0.pos.y == v1.pos.y) {
+    fillTopFlatTriangle(v0, v1, v2, color);
   } else {
-    float x3 = v0.position.x + ((v1.position.y - v0.position.y) /
-                                (v2.position.y - v0.position.y)) *
-                                   (v2.position.x - v0.position.x);
+    float t = (v1.pos.y - v0.pos.y) / (v2.pos.y - v0.pos.y);
 
-    fillBottomFlatTriangle(v0.position.x, v0.position.y, v1.position.x, x3,
-                           v1.position.y, color);
+    vertex_t v4;
 
-    fillTopFlatTriangle(v1.position.x, x3, v1.position.y, v2.position.x,
-                        v2.position.y, color);
+    v4.pos.y = v1.pos.y;
+    v4.pos.x = v0.pos.x + (v2.pos.x - v0.pos.x) * t;
+    v4.pos.z = v0.pos.z + (v2.pos.z - v0.pos.z) * t;
+
+    fillBottomFlatTriangle(v0, v1, v4, color);
+    fillTopFlatTriangle(v1, v4, v2, color);
   }
 }

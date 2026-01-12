@@ -3,6 +3,7 @@
 
 #include <SDL3/SDL.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 #define M_PI 3.14
 #define RADIANS(deg) ((deg) * (M_PI / 180.0f))
@@ -22,7 +23,7 @@ typedef struct {
 } mat4_t;
 
 typedef struct {
-  vec3_t position;
+  vec3_t pos;
 } vertex_t;
 
 typedef struct {
@@ -38,6 +39,8 @@ typedef struct {
   SDL_Renderer *renderer;
   SDL_Texture *texture;
   uint32_t *pixel_buffer;
+  float *depth_buffer;
+
   int height, width;
   int pitch;
 

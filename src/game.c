@@ -3,6 +3,7 @@
 #include "display.h"
 #include "math_utils.h"
 #include "types.h"
+#include <stdlib.h>
 
 void update_camera_movement(game_t *g) {
   const bool *state = SDL_GetKeyboardState(NULL);
@@ -77,6 +78,7 @@ bool game_init(game_t *g) {
   g->pixel_buffer = NULL;
   g->pitch = 0;
 
+  g->depth_buffer = (float *)malloc(g->width * g->height * sizeof(float));
   g->last_frame_time = SDL_GetTicks();
 
   g->cube_rot = (vec3_t){0.0f, 0.0f, 0.0f};
@@ -89,7 +91,7 @@ bool game_init(game_t *g) {
   g->projection_matrix = mat4_make_perspective(
       90.0f, (float)g->width / (float)g->height, 0.1f, 100.0f);
 
-  g->camera_pos = (vec3_t){0.0f, 0.0f, 3.0f};
+  g->camera_pos = (vec3_t){0.0f, 0.0f, 10.0f};
   g->camera_front = (vec3_t){0.0f, 0.0f, -1.0f};
   g->camera_up = (vec3_t){0.0f, 1.0f, 0.0f};
 
@@ -125,11 +127,15 @@ void game_update(game_t *g) {
 
 void game_render(game_t *g) {
   SDL_LockTexture(g->texture, NULL, (void **)&g->pixel_buffer, &g->pitch);
-  set_render_target(g->pixel_buffer, g->width, g->height, g->pitch);
+  set_render_target(g);
 
   clear_screen(COLOR_BLACK);
+  
+  vec3_t pos = g->cube_pos; 
+  pos.z = -15.0f;
 
   draw_cube(g->cube_pos, g->cube_rot, g->cube_scale, g);
+  draw_cube(pos, g->cube_rot, g->cube_scale, g);
 
   SDL_UnlockTexture(g->texture);
   SDL_RenderTexture(g->renderer, g->texture, NULL, NULL);
@@ -139,6 +145,8 @@ void game_render(game_t *g) {
 void game_exit(game_t *g) {
   SDL_DestroyWindow(g->window);
   SDL_DestroyRenderer(g->renderer);
+
+  free(g->depth_buffer);
 
   SDL_Quit();
 }

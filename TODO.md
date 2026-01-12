@@ -1,11 +1,6 @@
 # Renderer Development Roadmap
 
 ## Phase 1: 3D Foundation (Depth & Solidity)
-- [ ] Create a float `depth_buffer` array in `game_t` matching screen resolution.
-- [ ] Initialize `depth_buffer` to infinity in `clear_screen` function.
-- [ ] Implement barycentric weights or edge-walking variables to interpolate `1/w` (depth).
-- [ ] Add depth test (`current_z < stored_z`) inside `draw_scanline` loop before drawing pixels.
-- [ ] Create a test scene with two overlapping static cubes at different Z depths to verify sorting.
 - [ ] Implement `apply_light_intensity` helper to scale color values.
 - [ ] Calculate lighting intensity using dot product of `face_normal` and `light_direction`.
 - [ ] Apply calculated lighting color to faces in `draw_cube` (Flat Shading).
