@@ -50,6 +50,10 @@ typedef struct {
   int target_frame_rate;
   int frame_time;
 
+  // Light
+  vec3_t light_dir;
+  float ambient_light;
+
   // Scene Data
   vec3_t cube_pos;
   vec3_t cube_rot;

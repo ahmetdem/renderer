@@ -95,6 +95,10 @@ bool game_init(game_t *g) {
   g->camera_front = (vec3_t){0.0f, 0.0f, -1.0f};
   g->camera_up = (vec3_t){0.0f, 1.0f, 0.0f};
 
+  // g->light_dir = vec3_normalize(g->camera_pos);
+  g->light_dir = vec3_normalize((vec3_t){0.0f, 0.0f, 1.0f});
+  g->ambient_light = 0.1f;
+
   g->view_matrix = mat4_look_at(
       g->camera_pos, vec3_add(g->camera_pos, g->camera_front), g->camera_up);
 
@@ -123,6 +127,8 @@ void game_update(game_t *g) {
       g->camera_pos, vec3_add(g->camera_pos, g->camera_front), g->camera_up);
 
   update_camera_movement(g);
+
+  g->light_dir = vec3_normalize(g->camera_pos);
 }
 
 void game_render(game_t *g) {
@@ -130,12 +136,12 @@ void game_render(game_t *g) {
   set_render_target(g);
 
   clear_screen(COLOR_BLACK);
-  
-  vec3_t pos = g->cube_pos; 
-  pos.z = -15.0f;
+
+  vec3_t sca = {0.10f, 0.10f, 0.10f};
+  vec3_t rot = {0.0f, 0.0f, 0.0f};
+  draw_cube(g->light_dir, rot, sca, g);
 
   draw_cube(g->cube_pos, g->cube_rot, g->cube_scale, g);
-  draw_cube(pos, g->cube_rot, g->cube_scale, g);
 
   SDL_UnlockTexture(g->texture);
   SDL_RenderTexture(g->renderer, g->texture, NULL, NULL);

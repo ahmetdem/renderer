@@ -215,17 +215,24 @@ void draw_cube(vec3_t t_m, vec3_t r_m, vec3_t s_m, game_t *g) {
     vec3_t view_ray = vec3_sub(center, g->camera_pos);
 
     float dot = vec3_dot(triangle_normal, view_ray);
-
-    if (dot > 0) {
+    if (dot > 0)
       continue;
-    }
+
+    float alignment = vec3_dot(triangle_normal, g->light_dir);
+    if (alignment < 0.0f) alignment = 0.0f;
+
+    float final_intensity =
+        g->ambient_light + (alignment * (1.0f - g->ambient_light));
+
+    uint32_t final_color =
+        apply_light_intensity(COLOR_MAGENTA, final_intensity);
 
     triangle_t triangle;
     triangle.points[0].pos = projected_points[index0];
     triangle.points[1].pos = projected_points[index1];
     triangle.points[2].pos = projected_points[index2];
 
-    draw_filled_triangle(&triangle, COLOR_MAGENTA);
+    draw_filled_triangle(&triangle, final_color);
 
     draw_line(triangle.points[0], triangle.points[1], COLOR_BLACK);
     draw_line(triangle.points[1], triangle.points[2], COLOR_BLACK);

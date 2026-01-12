@@ -1,10 +1,6 @@
 # Renderer Development Roadmap
 
 ## Phase 1: 3D Foundation (Depth & Solidity)
-- [ ] Implement `apply_light_intensity` helper to scale color values.
-- [ ] Calculate lighting intensity using dot product of `face_normal` and `light_direction`.
-- [ ] Apply calculated lighting color to faces in `draw_cube` (Flat Shading).
-
 ## Phase 2: Texture Pipeline
 - [ ] Add `u` and `v` coordinate fields to the `vertex_t` struct.
 - [ ] Integrate `stb_image.h` or write a parser to load raw pixel data into a `texture_t` struct.
