@@ -2,7 +2,7 @@
 
 A 3D software renderer written in C using SDL3.
 
-[Renderer.png](renderer.png)
+![Renderer.png](renderer.png)
 
 This project was made to fill my curiosity on the math behind 3D Rendering and to be a base for later projects. It consists of:  
 - Software rendering (writing directly to a pixel buffer)
