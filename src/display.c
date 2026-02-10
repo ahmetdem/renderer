@@ -166,6 +166,7 @@ void draw_cube(vec3_t t_m, vec3_t r_m, vec3_t s_m, game_t *g) {
       mat4_mul_mat4(rotation_x, mat4_mul_mat4(rotation_y, rotation_z));
 
   mat4_t translation_m = mat4_make_translation(t_m.x, t_m.y, t_m.z);
+
   mat4_t model_m =
       mat4_mul_mat4(translation_m, mat4_mul_mat4(rotation_m, scale_m));
 

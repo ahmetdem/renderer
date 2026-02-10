@@ -1,23 +1,15 @@
 # Renderer
 
-A simple 3D software renderer written in C using SDL3.
+A 3D software renderer written in C using SDL3.
 
-## Description
-
-This project demonstrates the basics of 3D rendering, including:
+This project was made to fill my curiosity on the math behind 3D Rendering and to be a base for later projects. It consists of:  
 - Software rendering (writing directly to a pixel buffer)
 - Perspective projection
 - 3D transformations (rotation, scaling, translation)
 - Vector and matrix mathematics
+- Some Shading and "Light"
 
-Currently, it renders a rotating 3D cube.
-
-## Dependencies
-
-- **GCC** (GNU Compiler Collection)
-- **Make**
-- **SDL3** (Simple DirectMedia Layer 3)
-- **pkg-config**
+Currently, it renders a rotating 3D cube. I will later try create Minecraft using this as a base. 
 
 ## Building and Running
 
