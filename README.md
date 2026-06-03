@@ -4,7 +4,7 @@ A 3D software renderer written in C using SDL3.
 
 ![Renderer.png](renderer.png)
 
-<video src="https://github.com/ahmetdem/renderer/raw/main/renderer.mp4" controls></video>
+https://github.com/user-attachments/assets/613fea9e-5bca-4c8d-9490-1a8a89992a31
 
 This project was made to fill my curiosity on the math behind 3D Rendering and to be a base for later projects. It consists of:  
 - Software rendering (writing directly to a pixel buffer)
