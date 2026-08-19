@@ -5,7 +5,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define M_PI 3.14
+#define M_PI 3.14159265358979f
 #define RADIANS(deg) ((deg) * (M_PI / 180.0f))
 
 /* Vector 3 */
@@ -27,8 +27,43 @@ typedef struct {
 } vertex_t;
 
 typedef struct {
+  vec3_t *vertices;
+  int vertex_count;
+
+  int *indices;
+  int index_count;
+} mesh_t;
+
+typedef struct {
   vertex_t points[3];
 } triangle_t;
+
+typedef struct {
+  mesh_t *mesh;
+  vec3_t position;
+  vec3_t rotation;
+  vec3_t scale;
+  uint32_t color;
+  uint32_t tags;
+} entity_t;
+
+typedef enum {
+  TAG_NONE = 0,
+  TAG_PLAYER = 1 << 0,
+  TAG_COLLIDABLE = 1 << 1,
+  TAG_LIGHT = 1 << 2,
+  TAG_GRAVITY = 1 << 3,
+  TAG_ENEMY = 1 << 4,
+} entity_tag_t;
+
+typedef enum { BLOCK_AIR = 0, BLOCK_GRASS, BLOCK_STONE, BLOCK_DIRT } block_t;
+
+typedef struct {
+  block_t blocks[16][16][16];
+  vec3_t world_pos;
+  mesh_t *mesh;
+  bool dirty;
+} chunk_t;
 
 /*Game Struct*/
 typedef struct {
@@ -55,9 +90,11 @@ typedef struct {
   float ambient_light;
 
   // Scene Data
-  vec3_t cube_pos;
-  vec3_t cube_rot;
-  vec3_t cube_scale;
+  entity_t *entities;
+  int entity_count;
+  int entity_capacity;
+
+  chunk_t *test_chunk;
 
   triangle_t triangle;
 
@@ -75,6 +112,11 @@ typedef struct {
   float sensitivity;
 
   mat4_t view_matrix;
+  mat4_t view_projection;
+
+  // Debug
+  bool show_debug;
+  int triangle_count;
 } game_t;
 
 #endif

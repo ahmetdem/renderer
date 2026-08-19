@@ -1,8 +1,13 @@
 #include "game.h"
+#include "chunk.h"
 #include "colors.h"
 #include "display.h"
+#include "entity.h"
 #include "math_utils.h"
+#include "mesh.h"
 #include "types.h"
+#include <SDL3/SDL_render.h>
+#include <SDL3/SDL_timer.h>
 #include <stdlib.h>
 
 void update_camera_movement(game_t *g) {
@@ -51,14 +56,37 @@ void update_camera_movement(game_t *g) {
   g->camera_front = vec3_normalize(direction);
 }
 
+void add_entity(game_t *g, entity_t entity) {
+  if (g->entity_count == g->entity_capacity) {
+    g->entity_capacity *= 2;
+    g->entities = realloc(g->entities, g->entity_capacity * sizeof(entity_t));
+  }
+
+  g->entities[g->entity_count] = entity;
+  g->entity_count += 1;
+}
+
+void init_game_entities(game_t *g) {
+  g->entity_count = 0;
+  g->entity_capacity = 16;
+  g->entities = malloc(g->entity_capacity * sizeof(entity_t));
+
+  mesh_t *cube_mesh = create_cube_mesh();
+
+  entity_t light_source = {cube_mesh,          {-5, 15, 0},  {0, 0, 0},
+                           {0.2f, 0.2f, 0.2f}, COLOR_YELLOW, 0};
+  add_entity_tag(&light_source, TAG_LIGHT | TAG_COLLIDABLE);
+  add_entity(g, light_source);
+}
+
 bool game_init(game_t *g) {
   if (!SDL_Init(SDL_INIT_VIDEO))
     return false;
 
   g->is_running = true;
 
-  g->width = 640 * 1.5;
-  g->height = 480 * 1.3;
+  g->width = 1920;
+  g->height = 1080;
 
   g->window = SDL_CreateWindow("renderer", g->width, g->height,
                                SDL_WINDOW_ALWAYS_ON_TOP);
@@ -79,32 +107,37 @@ bool game_init(game_t *g) {
   g->pitch = 0;
 
   g->depth_buffer = (float *)malloc(g->width * g->height * sizeof(float));
-  g->last_frame_time = SDL_GetTicks();
-
-  g->cube_rot = (vec3_t){0.0f, 0.0f, 0.0f};
-  g->cube_scale = (vec3_t){1.0f, 1.0f, 1.0f};
-  g->cube_pos = (vec3_t){0.0f, 0.0f, -10.0f};
+  g->last_frame_time = SDL_GetPerformanceCounter();
 
   g->rotation_speed = 5.0f;
   g->total_rotation = 0.0f;
 
   g->projection_matrix = mat4_make_perspective(
-      90.0f, (float)g->width / (float)g->height, 0.1f, 100.0f);
+      110.0f, (float)g->width / (float)g->height, 0.1f, 100.0f);
 
   g->camera_pos = (vec3_t){0.0f, 0.0f, 10.0f};
   g->camera_front = (vec3_t){0.0f, 0.0f, -1.0f};
   g->camera_up = (vec3_t){0.0f, 1.0f, 0.0f};
 
-  // g->light_dir = vec3_normalize(g->camera_pos);
-  g->light_dir = vec3_normalize((vec3_t){0.0f, 0.0f, 1.0f});
-  g->ambient_light = 0.1f;
-
   g->view_matrix = mat4_look_at(
       g->camera_pos, vec3_add(g->camera_pos, g->camera_front), g->camera_up);
+
+  g->view_projection = mat4_mul_mat4(g->projection_matrix, g->view_matrix);
+
+  init_game_entities(g);
+
+  g->light_dir = vec3_normalize(find_entity(TAG_LIGHT, g)->position);
+  g->ambient_light = 0.1f;
 
   g->camera_yaw = -90.0f;
   g->camera_pitch = 0.0f;
   g->sensitivity = 0.05f;
+
+  g->show_debug = true;
+
+  g->test_chunk = create_chunk((vec3_t){0, 0, 0});
+  generate_flat_terrain(g->test_chunk);
+  build_chunk_mesh(g->test_chunk);
 
   SDL_RaiseWindow(g->window);
   SDL_SetWindowRelativeMouseMode(g->window, true);
@@ -114,34 +147,42 @@ bool game_init(game_t *g) {
 }
 
 void game_update(game_t *g) {
-  uint64_t current_time = SDL_GetTicks();
-  g->delta_time = (current_time - g->last_frame_time) / 1000.0f;
+  uint64_t current_time = SDL_GetPerformanceCounter();
+  g->delta_time = (float)(current_time - g->last_frame_time) /
+                  (float)SDL_GetPerformanceFrequency();
   g->last_frame_time = current_time;
-
-  g->total_rotation += g->rotation_speed * g->delta_time;
-  g->cube_rot.x = g->total_rotation;
-  g->cube_rot.y = g->total_rotation;
-  g->cube_rot.z = g->total_rotation;
 
   g->view_matrix = mat4_look_at(
       g->camera_pos, vec3_add(g->camera_pos, g->camera_front), g->camera_up);
+  g->view_projection = mat4_mul_mat4(g->projection_matrix, g->view_matrix);
 
   update_camera_movement(g);
-
-  g->light_dir = vec3_normalize(g->camera_pos);
 }
 
 void game_render(game_t *g) {
   SDL_LockTexture(g->texture, NULL, (void **)&g->pixel_buffer, &g->pitch);
   set_render_target(g);
-
   clear_screen(COLOR_BLACK);
 
-  vec3_t sca = {0.10f, 0.10f, 0.10f};
-  vec3_t rot = {0.0f, 0.0f, 0.0f};
-  draw_cube(g->light_dir, rot, sca, g);
+  g->triangle_count = 0;
 
-  draw_cube(g->cube_pos, g->cube_rot, g->cube_scale, g);
+  for (int i = 0; i < g->entity_count; i++) {
+    draw_entity(&g->entities[i], g);
+  }
+
+  vec3_t start = g->entities[0].position;
+  vec3_t stop = g->test_chunk->world_pos;
+
+  draw_line_3d(start, stop, COLOR_BLUE, g);
+
+  if (g->show_debug) {
+    draw_debug_overlay(g);
+  }
+
+  if (g->test_chunk && g->test_chunk->mesh) {
+    draw_mesh(g->test_chunk->mesh, g->test_chunk->world_pos, (vec3_t){0, 0, 0},
+              (vec3_t){1, 1, 1}, COLOR_GREEN, g);
+  }
 
   SDL_UnlockTexture(g->texture);
   SDL_RenderTexture(g->renderer, g->texture, NULL, NULL);
@@ -151,8 +192,25 @@ void game_render(game_t *g) {
 void game_exit(game_t *g) {
   SDL_DestroyWindow(g->window);
   SDL_DestroyRenderer(g->renderer);
+  SDL_DestroyTexture(g->texture);
 
   free(g->depth_buffer);
+
+  for (int i = 0; i < g->entity_count; i++) {
+    mesh_t *m = g->entities[i].mesh;
+    if (m) {
+      free(m->vertices);
+      free(m->indices);
+      free(m);
+      for (int j = i + 1; j < g->entity_count; j++) {
+        if (g->entities[j].mesh == m)
+          g->entities[j].mesh = NULL;
+      }
+    }
+  }
+
+  free(g->entities);
+  free_chunk(g->test_chunk);
 
   SDL_Quit();
 }
@@ -175,6 +233,9 @@ void handle_input(game_t *g) {
       }
       if (event.key.key == SDLK_K) {
         g->rotation_speed -= 5.0f;
+      }
+      if (event.key.key == SDLK_F3) {
+        g->show_debug = !g->show_debug;
       }
       break;
 

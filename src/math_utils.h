@@ -156,9 +156,9 @@ static inline mat4_t mat4_make_perspective(float fov, float aspect, float znear,
                                            float zfar) {
   const float DEG2RAD = acos(-1.0f) / 180;
 
-  float tangent = tan(fov / 2 * DEG2RAD);
-  float right = znear * tangent;
-  float top = right / aspect;
+  float tangent = tan(fov * 0.5 * DEG2RAD);
+  float top = znear * tangent;
+  float right = top * aspect;
 
   mat4_t matrix = {0};
   matrix.m[0] = znear / right;

@@ -12,7 +12,9 @@
 #include "game.h"
 #include "types.h"
 
-int main() {
+int main(int argc, char *argv[]) {
+  (void)argc;
+  (void)argv;
   game_t game = {0};
 
   if (!game_init(&game)) {

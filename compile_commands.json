@@ -1,17 +1,17 @@
 [
   {
-    "arguments": [
-      "/usr/bin/gcc",
-      "-Wall",
-      "-Wextra",
-      "-std=c11",
-      "-c",
-      "-o",
-      "src/main.o",
-      "src/main.c"
-    ],
-    "directory": "/home/ahmetdem/Dev/renderer",
-    "file": "/home/ahmetdem/Dev/renderer/src/main.c",
-    "output": "/home/ahmetdem/Dev/renderer/src/main.o"
+    "directory": "C:/Users/ahmetdem/Dev/renderer",
+    "command": "gcc --target=x86_64-w64-mingw32 -Wall -Wextra -std=c11 -IC:/msys64/mingw64/include -c src/main.c -o obj/main.o",
+    "file": "src/main.c"
+  },
+  {
+    "directory": "C:/Users/ahmetdem/Dev/renderer",
+    "command": "gcc --target=x86_64-w64-mingw32 -Wall -Wextra -std=c11 -IC:/msys64/mingw64/include -c src/game.c -o obj/game.o",
+    "file": "src/game.c"
+  },
+  {
+    "directory": "C:/Users/ahmetdem/Dev/renderer",
+    "command": "gcc --target=x86_64-w64-mingw32 -Wall -Wextra -std=c11 -IC:/msys64/mingw64/include -c src/display.c -o obj/display.o",
+    "file": "src/display.c"
   }
 ]

@@ -1,12 +1,14 @@
 #include "display.h"
 #include "colors.h"
+#include "font.h"
 #include "math_utils.h"
 #include "types.h"
 #include <SDL3/SDL_stdinc.h>
 #include <float.h>
+#include <stdbool.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
-#include <time.h>
 
 static uint32_t *framebuffer = NULL;
 static float *depthbuffer = NULL;
@@ -27,6 +29,34 @@ void set_render_target(game_t *g) {
 void clear_screen(uint32_t color) {
   SDL_memset4(framebuffer, color, screen_width * screen_height);
   memset(depthbuffer, 0, screen_width * screen_height * sizeof(float));
+}
+
+static inline vec3_t clip_to_screen(vec4_t clip_pos, int screen_w,
+                                    int screen_h) {
+  return (vec3_t){(clip_pos.x / clip_pos.w + 1.0f) * 0.5f * screen_w,
+                  (1.0f - clip_pos.y / clip_pos.w) * 0.5f * screen_h,
+                  1.0f / clip_pos.w};
+}
+
+bool project_point(vec3_t world_pos, game_t *g, vec3_t *out_screen_point) {
+  vec4_t clip_pos = mat4_mul_vec4(g->view_projection, vec3_to_vec4(world_pos));
+
+  if (clip_pos.w < 0.1f) {
+    if (out_screen_point) {
+      *out_screen_point = (vec3_t){-10000.0f, -10000.0f, 0.0f};
+    }
+    return false;
+  }
+
+  *out_screen_point = clip_to_screen(clip_pos, g->width, g->height);
+  return true;
+}
+
+void draw_line_3d(vec3_t p0, vec3_t p1, uint32_t color, game_t *g) {
+  vertex_t v0, v1;
+  if (project_point(p0, g, &v0.pos) && project_point(p1, g, &v1.pos)) {
+    draw_line(v0, v1, color);
+  }
 }
 
 void draw_pixel(int x, int y, uint32_t color) {
@@ -50,7 +80,7 @@ void draw_line(vertex_t v0, vertex_t v1, uint32_t color) {
   int x1 = (int)v1.pos.x;
   int y1 = (int)v1.pos.y;
 
-  float w0 = v1.pos.z;
+  float w0 = v0.pos.z;
   float w1 = v1.pos.z;
 
   int dx = abs(x1 - x0);
@@ -68,7 +98,7 @@ void draw_line(vertex_t v0, vertex_t v1, uint32_t color) {
 
   while (1) {
     if (x0 >= 0 && x0 < screen_width && y0 >= 0 && y0 < screen_height) {
-      if (current_w > depthbuffer[y0 * screen_width + x0]) {
+      if (current_w > depthbuffer[y0 * screen_width + x0] - 0.0001f) {
         depthbuffer[y0 * screen_width + x0] = current_w;
         draw_pixel(x0, y0, color);
       }
@@ -117,7 +147,8 @@ void draw_scanline(int x0, int x1, int y, float w0, float w1, uint32_t color) {
   if (x1 >= screen_width)
     x1 = screen_width - 1;
 
-  float w_step = (w1 - w0) / (float)(x1 - x0);
+  int dx = x1 - x0;
+  float w_step = (dx == 0) ? 0.0f : (w1 - w0) / (float)dx;
   float current_w = w0;
 
   uint32_t *pixel_row = framebuffer + (y * (screen_pitch / 4));
@@ -134,76 +165,40 @@ void draw_scanline(int x0, int x1, int y, float w0, float w1, uint32_t color) {
   }
 }
 
-void draw_cube(vec3_t t_m, vec3_t r_m, vec3_t s_m, game_t *g) {
-  vec3_t cube_vertices[] = {{-1, -1, -1}, {1, -1, -1}, {1, 1, -1}, {-1, 1, -1},
-                            {-1, -1, 1},  {1, -1, 1},  {1, 1, 1},  {-1, 1, 1}};
+void draw_entity(entity_t *entity, game_t *g) {
+  draw_mesh(entity->mesh, entity->position, entity->rotation, entity->scale,
+            entity->color, g);
+}
 
-  int cube_indices[] = {// Front Face (Z+)
-                        4, 5, 6, 4, 6, 7,
+void draw_mesh(mesh_t *mesh, vec3_t position, vec3_t rotation, vec3_t scale,
+               uint32_t color, game_t *g) {
+  mat4_t scale_m = mat4_make_scale(scale.x, scale.y, scale.z);
 
-                        // Right Face (X+)
-                        5, 1, 2, 5, 2, 6,
-
-                        // Back Face (Z-)
-                        1, 0, 3, 1, 3, 2,
-
-                        // Left Face (X-)
-                        0, 4, 7, 0, 7, 3,
-
-                        // Top Face (Y+)
-                        7, 6, 2, 7, 2, 3,
-
-                        // Bottom Face (Y-)
-                        0, 1, 5, 0, 5, 4};
-
-  mat4_t scale_m = mat4_make_scale(s_m.x, s_m.y, s_m.z);
-
-  mat4_t rotation_z = mat4_make_rotation_z(deg_to_rad(r_m.z));
-  mat4_t rotation_y = mat4_make_rotation_y(deg_to_rad(r_m.y));
-  mat4_t rotation_x = mat4_make_rotation_x(deg_to_rad(r_m.x));
+  mat4_t rotation_z = mat4_make_rotation_z(deg_to_rad(rotation.z));
+  mat4_t rotation_y = mat4_make_rotation_y(deg_to_rad(rotation.y));
+  mat4_t rotation_x = mat4_make_rotation_x(deg_to_rad(rotation.x));
 
   mat4_t rotation_m =
       mat4_mul_mat4(rotation_x, mat4_mul_mat4(rotation_y, rotation_z));
 
-  mat4_t translation_m = mat4_make_translation(t_m.x, t_m.y, t_m.z);
+  mat4_t translation_m =
+      mat4_make_translation(position.x, position.y, position.z);
 
   mat4_t model_m =
       mat4_mul_mat4(translation_m, mat4_mul_mat4(rotation_m, scale_m));
 
-  mat4_t mvp_m = mat4_mul_mat4(g->projection_matrix,
-                               mat4_mul_mat4(g->view_matrix, model_m));
-
-  vec3_t projected_points[8];
-
-  for (int i = 0; i < 8; i++) {
-    vec4_t clip_pos = mat4_mul_vec4(mvp_m, vec3_to_vec4(cube_vertices[i]));
-
-    if (clip_pos.w < 0.1f) {
-      projected_points[i] = (vec3_t){-10000, -10000, 0};
-      continue;
-    }
-
-    vec3_t projected = {clip_pos.x / clip_pos.w, clip_pos.y / clip_pos.w,
-                        clip_pos.z / clip_pos.w};
-
-    projected_points[i].z = 1.0f / clip_pos.w;
-
-    projected_points[i].x = (projected.x + 1) * 0.5 * screen_width;
-    projected_points[i].y = (1 - projected.y) * 0.5 * screen_height;
-  }
-
   // 0, 3, 6, 9, ...
-  for (int i = 0; i < 36; i += 3) {
-    int index0 = cube_indices[i];
-    int index1 = cube_indices[i + 1];
-    int index2 = cube_indices[i + 2];
+  for (int i = 0; i < mesh->index_count; i += 3) {
+    int index0 = mesh->indices[i];
+    int index1 = mesh->indices[i + 1];
+    int index2 = mesh->indices[i + 2];
 
     vec4_t v0_world4 =
-        mat4_mul_vec4(model_m, vec3_to_vec4(cube_vertices[index0]));
+        mat4_mul_vec4(model_m, vec3_to_vec4(mesh->vertices[index0]));
     vec4_t v1_world4 =
-        mat4_mul_vec4(model_m, vec3_to_vec4(cube_vertices[index1]));
+        mat4_mul_vec4(model_m, vec3_to_vec4(mesh->vertices[index1]));
     vec4_t v2_world4 =
-        mat4_mul_vec4(model_m, vec3_to_vec4(cube_vertices[index2]));
+        mat4_mul_vec4(model_m, vec3_to_vec4(mesh->vertices[index2]));
 
     vec3_t v0_world = {v0_world4.x, v0_world4.y, v0_world4.z};
     vec3_t v1_world = {v1_world4.x, v1_world4.y, v1_world4.z};
@@ -211,7 +206,6 @@ void draw_cube(vec3_t t_m, vec3_t r_m, vec3_t s_m, game_t *g) {
 
     vec3_t triangle_normal =
         calculate_triangle_normal(v0_world, v1_world, v2_world);
-
     vec3_t center = calculate_triangle_center(v0_world, v1_world, v2_world);
     vec3_t view_ray = vec3_sub(center, g->camera_pos);
 
@@ -220,24 +214,36 @@ void draw_cube(vec3_t t_m, vec3_t r_m, vec3_t s_m, game_t *g) {
       continue;
 
     float alignment = vec3_dot(triangle_normal, g->light_dir);
-    if (alignment < 0.0f) alignment = 0.0f;
+    if (alignment < 0.0f)
+      alignment = 0.0f;
 
     float final_intensity =
         g->ambient_light + (alignment * (1.0f - g->ambient_light));
 
-    uint32_t final_color =
-        apply_light_intensity(COLOR_MAGENTA, final_intensity);
+    uint32_t final_color = apply_light_intensity(color, final_intensity);
 
-    triangle_t triangle;
-    triangle.points[0].pos = projected_points[index0];
-    triangle.points[1].pos = projected_points[index1];
-    triangle.points[2].pos = projected_points[index2];
+    vec4_t v0_clip = mat4_mul_vec4(g->view_projection, vec3_to_vec4(v0_world));
+    vec4_t v1_clip = mat4_mul_vec4(g->view_projection, vec3_to_vec4(v1_world));
+    vec4_t v2_clip = mat4_mul_vec4(g->view_projection, vec3_to_vec4(v2_world));
 
-    draw_filled_triangle(&triangle, final_color);
+    vec4_t clipped_triangles[2][3];
+    int num_triangles =
+        near_plane_clipping(v0_clip, v1_clip, v2_clip, clipped_triangles);
 
-    draw_line(triangle.points[0], triangle.points[1], COLOR_BLACK);
-    draw_line(triangle.points[1], triangle.points[2], COLOR_BLACK);
-    draw_line(triangle.points[2], triangle.points[0], COLOR_BLACK);
+    for (int t = 0; t < num_triangles; t++) {
+      triangle_t triangle;
+
+      for (int p = 0; p < 3; p++) {
+        triangle.points[p].pos =
+            clip_to_screen(clipped_triangles[t][p], g->width, g->height);
+      }
+
+      draw_filled_triangle(&triangle, final_color, g);
+
+      draw_line(triangle.points[0], triangle.points[1], COLOR_BLACK);
+      draw_line(triangle.points[1], triangle.points[2], COLOR_BLACK);
+      draw_line(triangle.points[2], triangle.points[0], COLOR_BLACK);
+    }
   }
 }
 
@@ -301,7 +307,10 @@ void fillTopFlatTriangle(vertex_t v1, vertex_t v2, vertex_t v3,
   }
 }
 
-void draw_filled_triangle(const triangle_t *triangle, uint32_t color) {
+void draw_filled_triangle(const triangle_t *triangle, uint32_t color,
+                          game_t *g) {
+  g->triangle_count++;
+
   vertex_t v0 = triangle->points[0];
   vertex_t v1 = triangle->points[1];
   vertex_t v2 = triangle->points[2];
@@ -329,4 +338,123 @@ void draw_filled_triangle(const triangle_t *triangle, uint32_t color) {
     fillBottomFlatTriangle(v0, v1, v4, color);
     fillTopFlatTriangle(v1, v4, v2, color);
   }
+}
+
+vec4_t interpolate_at_near_plane(vec4_t v0, vec4_t v1, float znear) {
+  float t = (znear - v0.w) / (v1.w - v0.w);
+
+  vec4_t result;
+  result.x = v0.x + t * (v1.x - v0.x);
+  result.y = v0.y + t * (v1.y - v0.y);
+  result.z = v0.z + t * (v1.z - v0.z);
+  result.w = znear;
+  return result;
+}
+
+int near_plane_clipping(vec4_t v0_clip, vec4_t v1_clip, vec4_t v2_clip,
+                        vec4_t clipped_triangles[2][3]) {
+  float znear = 0.1f;
+
+  bool v0_behind = (v0_clip.w < znear);
+  bool v1_behind = (v1_clip.w < znear);
+  bool v2_behind = (v2_clip.w < znear);
+
+  int behind_count = v0_behind + v1_behind + v2_behind;
+
+  if (behind_count == 0) {
+    clipped_triangles[0][0] = v0_clip;
+    clipped_triangles[0][1] = v1_clip;
+    clipped_triangles[0][2] = v2_clip;
+    return 1;
+  }
+
+  if (behind_count == 1) {
+    vec4_t behind, front1, front2;
+
+    if (v0_behind) {
+      behind = v0_clip;
+      front1 = v1_clip;
+      front2 = v2_clip;
+    } else if (v1_behind) {
+      behind = v1_clip;
+      front1 = v0_clip;
+      front2 = v2_clip;
+    } else {
+      behind = v2_clip;
+      front1 = v0_clip;
+      front2 = v1_clip;
+    }
+
+    vec4_t inter1 = interpolate_at_near_plane(behind, front1, znear);
+    vec4_t inter2 = interpolate_at_near_plane(behind, front2, znear);
+
+    clipped_triangles[0][0] = front1;
+    clipped_triangles[0][1] = front2;
+    clipped_triangles[0][2] = inter1;
+
+    clipped_triangles[1][0] = inter1;
+    clipped_triangles[1][1] = front2;
+    clipped_triangles[1][2] = inter2;
+
+    return 2;
+  }
+
+  if (behind_count == 2) {
+    vec4_t front, behind1, behind2;
+
+    if (!v0_behind) {
+      front = v0_clip;
+      behind1 = v1_clip;
+      behind2 = v2_clip;
+    } else if (!v1_behind) {
+      front = v1_clip;
+      behind1 = v0_clip;
+      behind2 = v2_clip;
+    } else {
+      front = v2_clip;
+      behind1 = v0_clip;
+      behind2 = v1_clip;
+    }
+
+    vec4_t inter1 = interpolate_at_near_plane(behind1, front, znear);
+    vec4_t inter2 = interpolate_at_near_plane(behind2, front, znear);
+
+    clipped_triangles[0][0] = front;
+    clipped_triangles[0][1] = inter1;
+    clipped_triangles[0][2] = inter2;
+
+    return 1;
+  }
+
+  return 0;
+}
+
+void draw_debug_overlay(game_t *g) {
+  int y = 10;
+  int spacing = 12;
+  char buf[128];
+
+  sprintf(buf, "FPS: %d", (int)(1.0f / g->delta_time));
+  draw_text(10, y, buf, COLOR_WHITE);
+  y += spacing;
+
+  sprintf(buf, "Frame: %.2f ms", g->delta_time * 1000.0f);
+  draw_text(10, y, buf, COLOR_WHITE);
+  y += spacing;
+
+  sprintf(buf, "Triangles: %d", g->triangle_count);
+  draw_text(10, y, buf, COLOR_WHITE);
+  y += spacing;
+
+  sprintf(buf, "Entities: %d", g->entity_count);
+  draw_text(10, y, buf, COLOR_WHITE);
+  y += spacing;
+
+  sprintf(buf, "Cam: (%.1f, %.1f, %.1f)", g->camera_pos.x, g->camera_pos.y,
+          g->camera_pos.z);
+  draw_text(10, y, buf, COLOR_WHITE);
+  y += spacing;
+
+  sprintf(buf, "Yaw: %.1f  Pitch: %.1f", g->camera_yaw, g->camera_pitch);
+  draw_text(10, y, buf, COLOR_WHITE);
 }

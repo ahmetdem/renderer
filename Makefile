@@ -8,26 +8,26 @@ BIN_DIR = bin
 
 SRCS = $(wildcard $(SRC_DIR)/*.c)
 OBJS = $(patsubst $(SRC_DIR)/%.c, $(OBJ_DIR)/%.o, $(SRCS))
-
-TARGET = $(BIN_DIR)/render
+DEPS = $(OBJS:.o=.d)
+TARGET = $(BIN_DIR)/render.exe
 
 .PHONY: all clean run
 
 all: $(TARGET)
 
 $(TARGET): $(OBJS)
-	@mkdir -p $(BIN_DIR)
+	@if not exist "$(BIN_DIR)" mkdir "$(BIN_DIR)"
 	$(CC) $(OBJS) -o $@ $(LDFLAGS)
 
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
-	@mkdir -p $(OBJ_DIR)
+	@if not exist "$(OBJ_DIR)" mkdir "$(OBJ_DIR)"
 	$(CC) $(CFLAGS) -MMD -MP -c $< -o $@
 
--include $(OBJS:.o=.d) -Wunused-parameter
+-include $(DEPS)
+
+run: $(TARGET)
+	$(TARGET)
 
 clean:
-	rm -rf $(OBJ_DIR) $(BIN_DIR)
-	rm -f $(SRC_DIR)/*.o
-
-run: all
-	./$(TARGET) 
+	@if exist "$(OBJ_DIR)" rmdir /s /q "$(OBJ_DIR)"
+	@if exist "$(BIN_DIR)" rmdir /s /q "$(BIN_DIR)"

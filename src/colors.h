@@ -19,22 +19,17 @@
 #define COLOR_TRANSPARENT 0x00000000
 
 static inline uint32_t calculate_lerp(uint32_t ac, uint32_t bc, float t) {
-  uint8_t rA = (ac >> 24) & 0xFF;
-  uint8_t gA = (ac >> 16) & 0xFF;
-  uint8_t bA = (ac >> 8) & 0xFF;
-  uint8_t aA = ac & 0xFF;
+  uint8_t rA = (ac >> 24) & 0xFF, rB = (bc >> 24) & 0xFF;
+  uint8_t gA = (ac >> 16) & 0xFF, gB = (bc >> 16) & 0xFF;
+  uint8_t bA = (ac >> 8) & 0xFF, bB = (bc >> 8) & 0xFF;
+  uint8_t aA = ac & 0xFF, aB = bc & 0xFF;
 
-  uint8_t rB = (bc >> 24) & 0xFF;
-  uint8_t gB = (bc >> 16) & 0xFF;
-  uint8_t bB = (bc >> 8) & 0xFF;
-  uint8_t aB = bc & 0xFF;
+  uint8_t r = (uint8_t)(rA + (float)(rB - rA) * t);
+  uint8_t g = (uint8_t)(gA + (float)(gB - gA) * t);
+  uint8_t b = (uint8_t)(bA + (float)(bB - bA) * t);
+  uint8_t a = (uint8_t)(aA + (float)(aB - aA) * t);
 
-  uint8_t r = rA + (uint8_t)((rB - rA) * t);
-  uint8_t g = gA + (uint8_t)((gB - gA) * t);
-  uint8_t b = bA + (uint8_t)((bB - bA) * t);
-  uint8_t alpha = aA + (uint8_t)((aB - aA) * t);
-
-  return (r << 24) | (g << 16) | (b << 8) | alpha;
+  return (r << 24) | (g << 16) | (b << 8) | a;
 }
 
 static inline uint32_t apply_light_intensity(uint32_t c, float i) {
@@ -43,7 +38,6 @@ static inline uint32_t apply_light_intensity(uint32_t c, float i) {
   uint8_t bC = (c >> 8) & 0xFF;
   uint8_t aC = c & 0xFF;
 
-  // Calculate with floats and clamp to 255
   float rF = (float)rC * i;
   float gF = (float)gC * i;
   float bF = (float)bC * i;
